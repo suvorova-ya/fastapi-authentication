@@ -7,19 +7,19 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated='auto')
 SECRET_KEY = os.getenv('SECRET_KEY')
 ALGORITHM = os.getenv('ALGORITHM')
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
 
-def get_password_hash(password):
+def get_password_hash(password: str) -> str:
     """ хэширование пароля поступающего от пользователя """
     return pwd_context.hash(password)
 
 
-def verify_password(plain_password, hashed_password):
+def verify_password(plain_password: str, hashed_password: str) -> bool:
     """ проверка соответствия полученного пароля и хранимого хэша """
     return pwd_context.verify(plain_password, hashed_password)
 
@@ -36,5 +36,3 @@ def create_access_token(data: dict, expires_delta: timedelta | None = None):
     return encoded_jwt
 
 
-#print(pwd_context.hash("test"))     # для пользователя johndoe
-#print(pwd_context.hash("secret2"))  # для пользователя alice
