@@ -1,6 +1,7 @@
 from datetime import timedelta
 from typing import Annotated
 
+import jwt
 from fastapi import Depends, HTTPException, APIRouter
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -9,7 +10,8 @@ from starlette import status
 from app.api.shemas import User, Token, UserCreate
 from app.core.database import get_async_session
 from app.core.models import UserBase
-from app.dependencies.password import ACCESS_TOKEN_EXPIRE_MINUTES, create_access_token, get_password_hash
+from app.dependencies.password import ACCESS_TOKEN_EXPIRE_MINUTES, create_access_token, get_password_hash, \
+    create_refresh_token, SECRET_KEY, ALGORITHM
 from app.dependencies.user import authenticate_user, get_current_active_user
 
 router = APIRouter(prefix='/auth', tags=["auth"])
@@ -51,11 +53,30 @@ async def login_for_access_token(
             detail="Incorrect username or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    access_token = create_access_token(
-        data={"sub": user.username}, expires_delta=access_token_expires
+    access_token = create_access_token(data={"sub": user.username})
+    refresh_token = create_refresh_token(data={"sub": user.username})
+    return Token(access_token=access_token, refresh_token=refresh_token, token_type="bearer")
+
+
+@router.post("/refresh-token", response_model=Token)
+async def refresh_access_token(refresh_token: str):
+    try:
+        payload = jwt.decode(refresh_token, SECRET_KEY, algorithms=[ALGORITHM])
+        username = payload.get("sub")
+        if username is None:
+            raise HTTPException(status_code=401, detail="Invalid refresh token")
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Refresh token expired")
+    except jwt.PyJWTError:
+        raise HTTPException(status_code=401, detail="Invalid refresh token")
+
+    new_access_token = create_access_token(data={"sub": username})
+    new_refresh_token = create_refresh_token(data={"sub": username})
+    return Token(
+        access_token=new_access_token,
+        refresh_token=new_refresh_token,
+        token_type="bearer"
     )
-    return Token(access_token=access_token, token_type="bearer")
 
 
 @router.get("/users/me", response_model=User)

@@ -5,7 +5,7 @@ from app.core.database import Base
 
 
 class UserBase(Base):
-    """ Модель Use в БД """
+    """ Модель User в БД """
     __tablename__ = 'users'
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)

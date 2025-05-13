@@ -5,8 +5,8 @@ from jwt import InvalidTokenError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.shemas import UserInDB, User, TokenData
-from app.core.database import async_session_maker
+from app.api.shemas import TokenData
+from app.core.database import async_session_maker, get_async_session
 from app.dependencies.password import verify_password, oauth2_scheme, SECRET_KEY, ALGORITHM
 from app.core.models import UserBase
 
@@ -28,7 +28,7 @@ async def authenticate_user(session: AsyncSession, username: str, password: str)
 
 
 async def get_current_user(token: Annotated[str, Depends(oauth2_scheme)],
-                           session: AsyncSession = Depends(async_session_maker)
+                           session: Annotated[AsyncSession, Depends(get_async_session)],
                            ) -> UserBase:
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
