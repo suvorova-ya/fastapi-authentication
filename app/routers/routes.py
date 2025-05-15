@@ -1,18 +1,20 @@
-from datetime import timedelta
 from typing import Annotated
 
 import jwt
-from fastapi import Depends, HTTPException, APIRouter
+from fastapi import Depends, HTTPException, APIRouter, Request
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from starlette import status
+from starlette.responses import JSONResponse
+
 from app.api.shemas import User, Token, UserCreate
 from app.core.database import get_async_session
 from app.core.models import UserBase
-from app.dependencies.password import ACCESS_TOKEN_EXPIRE_MINUTES, create_access_token, get_password_hash, \
+from app.dependencies.password import create_access_token, get_password_hash, \
     create_refresh_token, SECRET_KEY, ALGORITHM
 from app.dependencies.user import authenticate_user, get_current_active_user
+from app.utils import COOKIE_NAME, COOKIE_PATH, COOKIE_HTTPONLY, COOKIE_SAMESITE, COOKIE_SECURE, COOKIE_MAX_AGE
 
 router = APIRouter(prefix='/auth', tags=["auth"])
 
@@ -41,11 +43,11 @@ async def register_user(user: UserCreate, session: AsyncSession = Depends(get_as
     return {"msg": "Регистрация прошла успешно"}
 
 
-@router.post("/login", response_model=Token)
+@router.post("/login")
 async def login_for_access_token(
         form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
         session: AsyncSession = Depends(get_async_session)
-) -> Token:
+):
     user = await authenticate_user(session, form_data.username, form_data.password)
     if not user:
         raise HTTPException(
@@ -55,11 +57,27 @@ async def login_for_access_token(
         )
     access_token = create_access_token(data={"sub": user.username})
     refresh_token = create_refresh_token(data={"sub": user.username})
-    return Token(access_token=access_token, refresh_token=refresh_token, token_type="bearer")
+    response = JSONResponse(
+        content={"access_token": access_token, "token_type": "bearer"}
+    )
+    response.set_cookie(
+        key=COOKIE_NAME,
+        value=refresh_token,
+        httponly=COOKIE_HTTPONLY,
+        secure=COOKIE_SECURE,
+        samesite=COOKIE_SAMESITE,
+        path=COOKIE_PATH,
+        max_age=COOKIE_MAX_AGE
+    )
+    return response
 
 
 @router.post("/refresh-token", response_model=Token)
-async def refresh_access_token(refresh_token: str):
+async def refresh_access_token(request: Request):
+    refresh_token = request.cookies.get("refresh_token")
+    if not refresh_token:
+        raise HTTPException(status_code=401, detail="Refresh token missing")
+
     try:
         payload = jwt.decode(refresh_token, SECRET_KEY, algorithms=[ALGORITHM])
         username = payload.get("sub")
@@ -72,11 +90,19 @@ async def refresh_access_token(refresh_token: str):
 
     new_access_token = create_access_token(data={"sub": username})
     new_refresh_token = create_refresh_token(data={"sub": username})
-    return Token(
-        access_token=new_access_token,
-        refresh_token=new_refresh_token,
-        token_type="bearer"
+    response = JSONResponse(
+        content={"access_token": new_access_token, "token_type": "bearer"}
     )
+    response.set_cookie(
+        key=COOKIE_NAME,
+        value=new_refresh_token,
+        httponly=COOKIE_HTTPONLY,
+        secure=COOKIE_SECURE,
+        samesite=COOKIE_SAMESITE,
+        path=COOKIE_PATH,
+        max_age=COOKIE_MAX_AGE
+    )
+    return response
 
 
 @router.get("/users/me", response_model=User)
@@ -84,3 +110,10 @@ async def read_users_me(
         current_user: Annotated[UserBase, Depends(get_current_active_user)],
 ):
     return current_user
+
+
+@router.post("/logout")
+async def logout():
+    response = JSONResponse(content={"message": "Logged out"})
+    response.delete_cookie(COOKIE_NAME, path=COOKIE_PATH)
+    return response

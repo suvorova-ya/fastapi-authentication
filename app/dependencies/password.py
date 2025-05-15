@@ -1,17 +1,16 @@
-import os
 from datetime import datetime, timezone, timedelta
 import jwt
 from fastapi.security import OAuth2PasswordBearer
 from passlib.context import CryptContext
 from dotenv import load_dotenv
 
+from app.utils import SECRET_KEY, ALGORITHM
+
 load_dotenv()
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated='auto')
-SECRET_KEY = os.getenv('SECRET_KEY')
-ALGORITHM = os.getenv('ALGORITHM')
-ACCESS_TOKEN_EXPIRE_MINUTES = 30
+
 
 
 def get_password_hash(password: str) -> str:

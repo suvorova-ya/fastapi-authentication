@@ -11,3 +11,4 @@ python-jose
 sqlalchemy
 pydantic-settings==2.9.1
 asyncpg
+uvicorn
